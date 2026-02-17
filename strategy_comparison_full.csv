@@ -1,0 +1,25 @@
+Scenario,Metric,Adaptive,Static,Improvement %
+Normal Market,Total PnL,2193.22,6288.51,-65.1
+Normal Market,Sharpe Ratio,0.25,0.90,-72.1
+Normal Market,Max Drawdown,-4081.10,-1751.53,-133.0
+Normal Market,Inventory Drift (Std),12.09,10.62,13.8
+Normal Market,Avg Abs Inventory,21.84,32.80,-33.4
+Normal Market,Avg Spread (bps),20.44,30.00,-31.9
+Normal Market,Total Fills,1398.00,1475.00,-5.2
+Normal Market,PnL Volatility,139.07,111.31,24.9
+Volatility Spike,Total PnL,-4894.26,4671.17,-204.8
+Volatility Spike,Sharpe Ratio,-0.28,0.29,-196.7
+Volatility Spike,Max Drawdown,-12106.96,-5048.24,-139.8
+Volatility Spike,Inventory Drift (Std),11.51,10.74,7.1
+Volatility Spike,Avg Abs Inventory,24.41,19.73,23.7
+Volatility Spike,Avg Spread (bps),32.87,30.00,9.6
+Volatility Spike,Total Fills,1690.00,1684.00,0.4
+Volatility Spike,PnL Volatility,278.71,257.29,8.3
+Extreme Stress,Total PnL,374.07,1974.99,-81.1
+Extreme Stress,Sharpe Ratio,0.08,0.27,-70.5
+Extreme Stress,Max Drawdown,-2213.70,-2035.50,-8.8
+Extreme Stress,Inventory Drift (Std),16.28,12.50,30.3
+Extreme Stress,Avg Abs Inventory,16.55,10.85,52.5
+Extreme Stress,Avg Spread (bps),69.12,30.00,130.4
+Extreme Stress,Total Fills,2060.00,2081.00,-1.0
+Extreme Stress,PnL Volatility,74.63,116.44,-35.9
