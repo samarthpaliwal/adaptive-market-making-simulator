@@ -1,73 +1,98 @@
-# Adaptive Market-Making Strategy Simulator
+# Adaptive Market-Making Simulator
 
-A single-file Python simulation that compares an adaptive market-making strategy against a fixed-spread baseline on a synthetic limit order book. Order arrivals follow Poisson processes, volatility switches between normal, high and extreme regimes on a schedule, and the adaptive quoter widens or skews its spread in response to realised volatility, inventory position and order-flow imbalance. The script runs both strategies through three stress scenarios, prints a metric-by-metric comparison, saves a CSV and two PNG figures.
+A limit order book simulation that measures what an adaptive spread buys a market maker when volatility jumps, and what it costs.
 
-## Requirements
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)
 
-- Python 3.8 or newer
-- NumPy, Pandas, Matplotlib
+![Cumulative PnL, inventory and quoted spread for the adaptive and fixed-spread strategies in three scenarios](docs/market_making_comparison.png)
 
-```bash
-pip install numpy pandas matplotlib
+## Problem
+
+A market maker quoting a fixed spread earns steadily in calm markets and is badly exposed when volatility
+spikes: it keeps quoting tight while the price moves through its inventory. Widening the spread reduces
+that exposure but gives up fills. The question is how much variance an adaptive quoter removes, and how
+much return it gives up to do it.
+
+## Approach
+
+One Python file simulates a synthetic limit order book and runs two strategies through the same three
+scenarios, 1,000 steps each, with a fixed seed.
+
+```mermaid
+flowchart LR
+    S["StressTestSuite<br/>normal · volatility spike · extreme stress"] --> SIM["MarketMakingSimulator"]
+    SIM --> LOB["LimitOrderBook<br/>regime-dependent mid price"]
+    SIM --> GEN["OrderGenerator<br/>Poisson buy and sell arrivals"]
+    LOB --> ST["MarketState<br/>mid · volatility · imbalance · regime"]
+    ST --> A["AdaptiveMarketMaker"]
+    ST --> B["StaticMarketMaker<br/>fixed 0.3% spread"]
+    GEN --> F["Fills"]
+    A --> F
+    B --> F
+    F --> M["PerformanceMetrics"]
+    M --> OUT["CSV + two figures"]
 ```
 
-## Setup
+- **Market.** The mid price moves with regime-dependent volatility (normal, high, extreme) on a schedule
+  set by the scenario. Orders arrive as Poisson processes; the base rate of 5.0 is scaled by 1.0, 1.5 and
+  2.0 across regimes and biased by order-flow imbalance.
+- **Adaptive quoter.** Base spread of 0.2% of mid, widened by a realised-volatility multiplier, shifted by
+  an inventory penalty and skewed by order-flow imbalance. Inventory limit 100, quote size 10.
+- **Baseline.** A fixed 0.3% spread with the same inventory limit and size.
+- **Metrics.** Total PnL, Sharpe ratio, max drawdown, inventory drift, average absolute inventory, average
+  spread, fill count and PnL volatility, per scenario and strategy.
+
+## Results
+
+From `strategy_comparison_full.csv` (seed 42). A fresh run reproduces these numbers.
+
+| Scenario | Metric | Adaptive | Fixed | Change |
+|---|---|---|---|---|
+| Extreme stress | PnL volatility | 74.63 | 116.44 | **-35.9%** |
+| Extreme stress | Average spread (bps) | 69.12 | 30.00 | +130.4% |
+| Extreme stress | Total PnL | 374.07 | 1,974.99 | -81.1% |
+| Volatility spike | PnL volatility | 278.71 | 257.29 | +8.3% |
+| Volatility spike | Total PnL | -4,894.26 | 4,671.17 | -204.8% |
+| Normal market | PnL volatility | 139.07 | 111.31 | +24.9% |
+| Normal market | Total PnL | 2,193.22 | 6,288.51 | -65.1% |
+
+The adaptive quoter cut PnL volatility by 35.9% in the extreme-stress scenario by widening its spread to
+more than twice the baseline. It paid for that in return: total PnL and Sharpe ratio were lower than the
+fixed spread in all three scenarios, and in the normal and volatility-spike scenarios its PnL volatility
+was higher. With these parameters the adaptive policy is a variance hedge for the extreme regime, not a
+better strategy overall. The parameters are untuned.
+
+![Bar charts comparing the key metrics for both strategies](docs/performance_metrics_comparison.png)
+
+## Quick start
 
 ```bash
 git clone https://github.com/samarthpaliwal/adaptive-market-making-simulator.git
 cd adaptive-market-making-simulator
-```
-
-No environment variables or configuration files are needed. `np.random.seed(42)` is set at import, so runs are reproducible.
-
-## Usage
-
-```bash
+pip install -r requirements.txt
 python adaptive_market_making_simulator.py
 ```
 
-The script runs the adaptive strategy and then the static baseline through the three scenarios (1,000 steps each), prints a comparison table per scenario (metric, adaptive value, static value, percent change), and writes to the current directory:
+The run takes a few seconds, prints a comparison table per scenario and writes three files to the current
+directory: `strategy_comparison.csv`, `market_making_comparison.png` and
+`performance_metrics_comparison.png`. On a machine with no display, set `MPLBACKEND=Agg`.
 
-- `strategy_comparison.csv` - the comparison table
-- `market_making_comparison.png` - 9-panel figure: cumulative PnL, inventory and spread width (bps) for each of the three scenarios
-- `performance_metrics_comparison.png` - bar charts of the key metrics
+To experiment, change the attributes set in the strategy constructors (`base_spread`,
+`volatility_spread_multiplier`, `inventory_penalty`, `imbalance_sensitivity`, `max_inventory`),
+`OrderGenerator.base_arrival_rate`, or the `duration` passed to `StressTestSuite.run_all_scenarios`.
 
-`strategy_comparison_full.csv` in the repository is the output of a previous run.
+## Tech stack
 
-## How it works
+Python, NumPy, pandas, Matplotlib.
 
-Market environment (`adaptive_market_making_simulator.py`):
-
-- `MarketRegime` / `MarketState` - regime enum (NORMAL, HIGH_VOLATILITY, EXTREME_VOLATILITY) and the per-step state (mid price, volatility, order-flow imbalance, regime).
-- `LimitOrderBook` - evolves the mid price with regime-dependent volatility and exposes the current `MarketState`; each strategy's `process_fills` decides which of its quotes get hit by the generated orders.
-- `OrderGenerator` - Poisson buy/sell arrivals; the base rate (5.0) is scaled by 1.0 / 1.5 / 2.0 across regimes and biased by order-flow imbalance.
-
-Strategies:
-
-- `AdaptiveMarketMaker` - base spread 0.2% of mid, scaled by a volatility multiplier (`volatility_spread_multiplier = 2.0`), shifted by an inventory penalty (`inventory_penalty = 0.001`) and an imbalance term (`imbalance_sensitivity = 0.0005`); `max_inventory = 100`, quote size 10.
-- `StaticMarketMaker` - fixed 0.3% spread, same inventory limit and size; the baseline.
-
-Simulation and analysis:
-
-- `MarketMakingSimulator` - steps the book, applies the scenario's regime changes, records quotes, inventory, PnL, volatility and fills.
-- `StressTestSuite` - defines the `normal_market`, `volatility_spike` and `extreme_stress` regime schedules and runs a strategy class through all three.
-- `PerformanceMetrics` - computes Total PnL, Sharpe ratio, max drawdown, inventory drift, average absolute inventory, average spread (bps), fill count and PnL volatility, and builds the comparison DataFrame.
-- `create_visualizations` - the two PNG figures.
-
-Results from the committed `strategy_comparison_full.csv` (seed 42):
-
-- In the extreme-stress scenario the adaptive strategy's PnL volatility was 74.63 versus 116.44 for the static baseline, a 35.9% reduction, and its average spread widened to 69.12 bps versus the fixed 30 bps, a 130.4% expansion.
-- In the same run the adaptive strategy had lower total PnL and Sharpe ratio than the static baseline in all three scenarios (for example 374.07 vs 1974.99 total PnL under extreme stress, and a loss of -4894.26 vs a gain of 4671.17 in the volatility-spike scenario). The adaptive policy trades return for lower variance in the extreme regime; it is not a uniformly better strategy in this configuration.
-
-Parameters to experiment with are the attributes set in the strategy constructors (`base_spread`, `volatility_spread_multiplier`, `inventory_penalty`, `imbalance_sensitivity`, `max_inventory`), `OrderGenerator.base_arrival_rate`, and the `duration` passed to `StressTestSuite.run_all_scenarios`.
-
-## Project layout
+## Project structure
 
 ```
 adaptive-market-making-simulator/
-├── adaptive_market_making_simulator.py   # all code: environment, strategies, simulator, metrics, plots, main()
-├── strategy_comparison_full.csv          # saved output of a previous run
-└── README.md
+├── adaptive_market_making_simulator.py   environment, strategies, simulator, metrics, plots, main()
+├── strategy_comparison_full.csv          reference output of a run with seed 42
+├── docs/                                 the two figures a run produces
+├── requirements.txt
+└── LICENSE
 ```
-
-Running the script also produces `strategy_comparison.csv`, `market_making_comparison.png` and `performance_metrics_comparison.png`.
